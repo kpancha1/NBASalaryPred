@@ -1,0 +1,5 @@
+"0","# read in raw data"
+"0","nbasalary <- read.csv(""nba_salaries.csv"")"
+"0","nbasalary <- clean_names(nbasalary)"
+"0",""
+"0","head(nbasalary)"

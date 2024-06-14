@@ -1,0 +1,9 @@
+"0","nbasalary_team2 <- nbasalary %>%"
+"0","  separate(team, into = c(""team"", ""team2""), sep = ""/"") %>%"
+"0","  mutate(team2 = ifelse(is.na(team2), team, team2)) %>%"
+"0","  select(player_name, salary, team, team2, everything())"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Missing pieces filled with `NA` in 404 rows [1, 2, 4, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20,
+21, 22, 23, ...].[39m
+"
+"0","head(nbasalary_team2)"

@@ -1,0 +1,2 @@
+"0","# creating 10 folds"
+"0","nba_folds <- vfold_cv(nba_train, strata = salary, v = 5)"

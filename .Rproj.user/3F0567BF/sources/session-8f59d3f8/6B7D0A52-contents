@@ -1,0 +1,13 @@
+# LINEAR REGRESSION 
+
+load("/Users/keya0/projects/nbasalary/nba_model_setup.rda")
+
+lm_model <- linear_reg() %>% 
+  set_engine("lm")
+
+lm_workflow <- workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(nba_recipe)
+
+# no tuning, no grid
+

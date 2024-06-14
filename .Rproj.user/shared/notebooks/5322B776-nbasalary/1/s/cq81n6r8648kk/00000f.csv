@@ -1,0 +1,6 @@
+"0","load(""/Users/keya0/projects/nbasalary/models/knn_tuned.rda"")
+
+"
+"2","Error in stopifnot(is.character(filename), length(filename) == 1L) : 
+  reached elapsed time limit
+"

@@ -1,0 +1,5 @@
+"0","set.seed(333)"
+"0","# splitting data"
+"0","nba_split <- initial_split(nbasalary, strata = salary, prop =.7)"
+"0","nba_train <- training(nba_split)"
+"0","nba_test <- testing(nba_split)"

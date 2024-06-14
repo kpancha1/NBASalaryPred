@@ -1,0 +1,8 @@
+"0","ggplot(nbasalary, aes(salary)) +"
+"0","  geom_histogram(binwidth = 1000000, fill='blue4') +"
+"0","  scale_x_continuous(labels = scales::comma_format(scale = 1e-6, suffix = ""M"")) +"
+"0","  labs("
+"0","    title = ""Distribution of NBA Salaries (2022-2023 Season)"","
+"0","    x = ""Salary (in millions of USD)"","
+"0","    y = ""Count"""
+"0","  ) + theme_minimal()"

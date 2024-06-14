@@ -1,0 +1,9 @@
+"0","ggplot(nbasalary, aes(x = pts, y = e_fg)) +"
+"0","  geom_point() +"
+"0","  geom_smooth(method = ""lm"", se = FALSE, color = ""red3"") +"
+"0","  labs(title = ""Scatter Plot of Points vs EFG%"","
+"0","       x = ""Points per Game"","
+"0","       y = ""Efficent Field Goal Percentage"") +"
+"0","  theme_minimal()"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"

@@ -1,0 +1,22 @@
+# K NEAREST NEIGHBORS
+
+load("/Users/keya0/projects/nbasalary/nba_model_setup.rda")
+
+knn_model <- nearest_neighbor(neighbors = tune()) %>% 
+  set_mode("regression") %>% 
+  set_engine("kknn")
+
+knn_workflow <- workflow() %>% 
+  add_model(knn_model) %>% 
+  add_recipe(nba_recipe)
+
+knn_grid <- grid_regular(neighbors(range = c(1,15)), 
+                         levels = 5)
+
+knn_tuned <- tune_grid(
+  knn_workflow,
+  resamples = nba_folds,
+  grid = knn_grid
+)
+
+save(knn_tune, file = "knn_tuned.rda")

@@ -1,0 +1,531 @@
+---
+title: "Predicting NBA Players' Salaries for the 2022-2023 Season"
+author: "Keya Panchal"
+output: html_document
+date: "PSTAT 131 - Spring 2024"
+---
+
+# Introduction
+The purpose of this project is to build and utilize a machine learning model that will predict NBA players' salaries in the 2022-2023 season. The data we are using is from the Kaggle dataset, ["NBA Player Salaries (2022-23 Season)"](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season/data?select=nba_salaries.csv). More information about the data can be found in [Source](#sources). We will try multiple models and choose the most accurate one to tackle this regression problem: "Based on their statistics, what would an NBA player's salary be for the 2022-2023 season?" Let's get started!
+
+## The Salary Cap
+Each team operates under a salary cap, a financial constraint that limits the total amount a team can spend on player salaries. Each NBA team is allotted the same salary cap, which is determined as a percentage of the league's revenue from the previous season. The salary cap for the 2022-2023 season was set at [$123.655 million](https://www.nba.com/news/nba-salary-cap-for-2022-23-season-set-at-just-over-123-million).
+
+## The Importance of Player Salaries
+For NBA team management, understanding and predicting player salaries is vital to constructing the most effective roster. Accurate salary predictions allow general managers to optimize their rosters by balancing star player contracts with role players, ensuring they remain competitive while adhering to financial constraints. This strategic allocation of resources can be the difference between a championship-contending team and one that struggles to make the playoffs.
+
+## Environment Setup
+```{r, include=FALSE}
+library(knitr)
+library(MASS)
+library(tidyverse)
+library(tidymodels)
+library(dplyr)
+library(janitor)
+library(yardstick)
+library(stringr)
+library(naniar)
+
+# plotting
+library(corrplot)
+library(corrr)
+
+library(ggplot2)
+library(ggrepel)
+library(ggimage)
+
+# modeling
+library(ISLR)
+library(discrim)
+library(poissonreg)
+library(glmnet)
+library(kknn)
+library(xgboost)
+library(rpart.plot)
+library(vip)
+library(randomForest)
+
+tidymodels_prefer()
+
+knitr::opts_chunk$set(
+    echo = TRUE,     # all code chunks will be included
+    warning = FALSE, # don't show warnings
+    message = FALSE, # don't show messages
+    fig.height = 5,
+    fig.width = 7,
+    tidy = TRUE,
+    tidy.opts = list(width.cutoff = 60)
+)
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+options(digits = 4)
+```
+
+# Tidying Raw Data
+Let's introduce the central aspect of the project - the data! We will first have to tidy the raw data to ensure that we can properly and efficiently work with it.
+```{r}
+# read in raw data
+nbasalary <- read.csv("nba_salaries.csv")
+nbasalary <- clean_names(nbasalary)
+
+head(nbasalary)
+```
+## Dropping Unnecessary Variables
+```{r}
+dim(nbasalary)
+```
+The data contains 467 observations and 32 variables. Those are quite a few variables, so we will want to narrow those down! We can immediately see that the columns `x` and `player_additional` are identification variables, but since we already have `player_name`, we can drop the other two columns. 
+
+Additionally, we can remove variables that correlate heavily with each other. In this case, the variables that count the number of *made* shots and *attempted* shots (e.g. `ft` and `fta` respectively) can be discarded since there are also percentage variables that provide information regarding the ratio of made and attempted shots (e.g. `ft_2`). Therefore, we can drop the variables `fg`, `fga`, `x3p`, `x3pa`, `x2p`, `x2pa`, `ft`, and `fta`.
+
+Another variable conflict exists between field goal percentage `fg_2` and effective field goal percentage `e_fg`. Both address the field goal percentage. To reduce multicollinearity and redundancy, we will choose to keep `e_fg` rather than `fg_2`. 3P% and 2P% together already cover the two main types of shots and FG% is essentially an average of these two, which might add redundancy rather than additional insight. eFG%, unlike FG%, complements 3P% and 2P% by providing an overall efficiency metric that takes the differing values of the shots into account.
+
+Collinearity can also be found in `trb`. TRB is the sum of ORB and DRB, so to include all three in a model will introduce perfect multicollinearity, as TRB can be perfectly predicted by ORB and DRB. Therefore, we will drop `trb`.
+
+```{r}
+nbasalary <- nbasalary %>%
+  select(player_name, salary, position, age, team, gp, gs, mp, x3p_2, x2p_2, 
+         e_fg, ft_2, orb, drb, ast, stl, blk, tov, pf, pts) %>%
+  mutate(position = factor(position),
+         team = factor(team))
+```
+
+## Codebook
+Now that we have narrowed down the variables, we have the 19 predictors that we will be working with.
+
+These predictors are described as follows:
+* `player_name`: The first and last name of each NBA player.
+* `salary`: The 2022-2023 salary for each player in US dollars.
+* `position`: The [position](https://jr.nba.com/basketball-positions/) of each player with the unique values:
+    + `PG`: point guard
+    + `PF`: point forward
+    + `SG`: shooting guard
+    + `SF`: small forward
+    + `C`: center
+    +  `Combo`: a combination of two of the above (e.g. `SF-SG`)
+* `age`: The age of each player.
+* `team`: The team (or first team if multiple) played for in the 2022-23 season. Therefore, this represents the team distribution pre-trade.
+* `gp`: The number of games played.
+* `gs`: The number of games started.
+* `mp`: The number of minutes per game for each player.
+* `3p_2`: The three-point percentage.
+* `2p_2`: The two-point percentage.
+* `efg_2`: The effective field goal percentage. This statistic differs from the field goal percentage in that it adjusts field goal percentage to account for the fact that three-point field goals count for three points, while all other field goals only count for two points.
+* `ft_2`: The free-throw percentage.
+* `orb`: The number of offensive rebounds per game.
+* `drb`: The number of defensive rebounds per game.
+* `ast`: The number of assists per game.
+* `stl`: The number of steals per game.
+* `blk`: The number of blocks per game.
+* `tov`: The number of turnovers per game.
+* `pf`: The number of personal fouls per game.
+* `pts`: The points per game.
+
+# Exploratory Data Analysis (EDA)
+## Missing Data
+Before moving forward, let's take a look at missingness within the data.
+```{r}
+vis_miss(nbasalary)
+```
+We can see that there is some missing data within this dataset. The missingness is minimal at 0.4% and upon further inspection, these missing values are within the "percentage" columns (e.g. three-point percentage - `x3p_2`).
+
+```{r}
+rows_with_na <- nbasalary %>% filter(!complete.cases(.))
+print(rows_with_na)
+```
+There are 34 observations with missing data, or a little over 7% of our data. Instead of dropping all of these observations, we can discern a pattern within the rows with N/A values. All of the N/A values seem to come about because the percentages are being calculated by the division of zeroes. Therefore, we can impute these N/A values with zero values. 
+```{r}
+nbasalary <- nbasalary %>%
+  replace_na(list(fg_2 = 0, x3p_2 = 0, 
+             x2p_2 = 0, e_fg = 0, ft_2 = 0))
+```
+
+Let's recheck the missingness to ensure we have taken care of each N/A value:
+```{r}
+vis_miss(nbasalary)
+```
+Yay! We have successfully completed imputation on the missing values. We are now able to accurately explore the relationships between our variables, including our outcome variable.
+
+## Plots
+To get a better idea of our data, we must create some visualizations. Firstly, we will obtain a distribution of our outcome variable, salary.
+
+### Salary Distribution
+```{r}
+ggplot(nbasalary, aes(salary)) +
+  geom_histogram(binwidth = 1000000, fill='blue4') +
+  scale_x_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  labs(
+    title = "Distribution of NBA Salaries (2022-2023 Season)",
+    x = "Salary (in millions of USD)",
+    y = "Count"
+  ) + theme_minimal()
+```
+```{r, include=FALSE}
+range(nbasalary$salary)
+```
+The salaries range from about \$5,800 all the way to about \$48,000,000. However, the majority of players earn less than ten million dollars. There is specifically a peak with almost 100 players earning about three million dollars.
+
+### Correlation Plot
+The next step is to identify the correlations between all the predictors.
+```{r}
+nbasalary %>%
+  select_if(is.numeric) %>%
+  cor() %>%
+  corrplot(type = 'full', diag = FALSE, 
+           method = 'color', addCoef.col = "black", number.cex = 0.5)
+```
+We can see that across all variable relationships - except `x3p_2`-`orb`, `x3p_2`-`blk`, and `x2p_2`-`x3p_2` - there is a positive correlation, whether weak or strong. The negative correlations are weak, but intuitively we can infer that players who excel close to the basket, are less likely to also excel further from the basket at the three-point line. 
+
+The strongest correlations can be found between `mp`-`gs`, `mp`-`pts`, `tov`-`pts` and `tov`-`mp`. It also makes sense that a greater value for the minutes played per game correlate to more games started and well as to the number of points a player achieves per game. The correlation between turnovers are points is explicable: the more points achieved, the more time a player handles the ball which makes more likely to turnover the ball. 
+
+### Points & Efficiency
+The strongest correlation with the outcome variable was with points per game. This relationship would be an interesting one to examine.
+```{r}
+ggplot(nbasalary, aes(x = pts, y = salary)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red3") +
+  labs(title = "Scatter Plot of Points vs Salary",
+       x = "Points per Game",
+       y = "Salary (in millions of USD)") +
+    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+We intuitively can understand why the relationship between the two would be so strongly positive. The more points a player averages per game, the more they contribute to the team and make an impact on the game. Therefore, a higher salary would be merited. However, a high points per game does not necessarily mean that the player is efficient with the ball. The correlation matrix reveals that points per game and the efficiency metrics have weak positive correlations. Let's take a look at specifically points per game vs. EFG%:
+```{r}
+ggplot(nbasalary, aes(x = pts, y = e_fg)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red3") +
+  labs(title = "Scatter Plot of Points vs EFG%",
+       x = "Points per Game",
+       y = "Efficent Field Goal Percentage") +
+  theme_minimal()
+```
+Those with the highest efficiency actually make the least amount of points per game. The less shots you take, the more impact each shot (whether a miss or a make) has on your EFG%. We can see this by the large range at a lower points per game, and as the points per game increase, the EFG% range narrows to around 50%. Let's observe if this unique distribution in relation to EFG% continues when comparing EFG% and salary:
+```{r}
+ggplot(nbasalary, aes(x = e_fg, y = salary)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red3") +
+  labs(title = "Scatter Plot of EFG% vs Salary",
+       x = "Efficent Field Goal Percentage",
+       y = "Salary (in millions of USD)") +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+The tapering of EFG% is shown here as well. The EFG% does not impact salary heavily at all; the players with the highest EFG% are actually do not see that reflected by their low salary. This makes sense given our previous investigation of EFG% and points per game. We can conclude that EFG% is not something that is heavily accounted for when determining salaries of players.
+
+### Positions
+```{r}
+unique(nbasalary$position)
+```
+We have five positions and three combinations of positions since some players assume more than one role on the court. Further along, when we dummy code categorical variables, we want to avoid adding too many additional predictors. Therefore, we will group together the three combinations of roles into one value, Combo.
+```{r}
+nbasalary <- nbasalary %>%
+  mutate(position = forcats::fct_collapse(position, 
+                                          Combo = c('PG-SG', 'SF-SG', 'SG-PG', 'SF-PF')))
+```
+Let's confirm our factor recoding worked:
+```{r}
+nbasalary %>%
+  ggplot(aes(y = forcats::fct_infreq(position))) +
+  geom_bar() +
+  theme_minimal() +
+  ylab("Position")
+```
+Great - now let's take a look at the relationship between positions and salary. We will utilize a boxplot to allow us to view the distribution of the different positions. To gain another perspective, we will also look at the average salary for each position using a bar chart.
+
+```{r}
+nbasalary %>%
+  ggplot(aes(x = position, y = salary)) +
+    geom_boxplot() +
+    geom_jitter(alpha = 0.1) +
+    labs(title = "Box Plot of Salary by Position", x = "Position", y = "Salary") +
+    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+    theme_minimal()
+```
+The players that play more than one role earn significantly more. The position of point guard also trends towards a higher salary.
+
+```{r}
+nbasalary %>%
+  select(position, salary) %>%
+  group_by(position) %>%
+  summarise(meansalary = mean(salary)) %>%
+  
+  ggplot(aes(x = position, y = meansalary)) +
+    geom_bar(stat = "identity", fill = "blue4") +
+    labs(title = "Mean Salary by Position",
+         x = "Position",
+         y = "Mean Salary") +
+    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+    theme_minimal()
+```
+Just as we observed in the previous graph, the "Combo" players earn on average significantly more, with a mean around almost 15 million dollars. The point guards earn around 12 million on average as the second highest, while the position with the lowest salary on average is the shooting guard with about 6 million dollars. Note that these averages include the "outliers" because those significantly higher salaries are important to our model too thus we will not exclude them.
+
+This analysis shows us that `position` should included in our model recipe since there is at least some kind of significant relationship to salary.
+
+### Teams
+As we discussed, each team has the same salary cap. However, how they utilize that cap space is what makes the difference between teams. Therefore, we will want to take a look at the salary distribution for each team. Which teams prioritize superstars (identified as players with high salaries) and which prioritize a greater depth in the roster with more roleplayers?
+
+#### Creating `traded` Variable
+Some players have, over the course of the 2022-2023 season, been traded to another team. These traded players have two teams listed under the `team` variable, separated by a slash (e.g. LAL/LAC). To better analyze the effect of being traded on salary, we will create a new variable `traded` that will have a value of TRUE if the player has been traded and FALSE otherwise.
+
+```{r}
+# creating new dataset with variable "traded"
+nbasalary_trade <- nbasalary %>%
+  mutate(traded = str_detect(team, "/")) %>%
+  select(player_name, salary, traded, everything())
+
+head(nbasalary_trade)
+```
+
+```{r}
+ggplot(nbasalary_trade, aes(x = traded, y = salary)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Salary by Traded Status", x = "Traded", y = "Salary") +
+  scale_x_discrete(labels = c("False" = "Not Traded", "True" = "Traded")) +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+
+#### Creating `team2` Variable
+Some players have, over the course of the 2022-2023 season, been traded to another team. To indicate this, the team variable will be separated into two variables `team` and `team2` where the `team` value is the team before the slash, and `team2` value is the team after the slash (the second team the player played for).
+
+If the player has not played for more than one team, then `team2` value will be the same as the `team` value.
+```{r}
+nbasalary_team2 <- nbasalary %>%
+  separate(team, into = c("team", "team2"), sep = "/") %>%
+  mutate(team2 = ifelse(is.na(team2), team, team2)) %>%
+  select(player_name, salary, team, team2, everything())
+
+head(nbasalary_team2)
+```
+
+The new variable:
+* `team2`: If the player was traded, the second team they played for in the 2022-2023 season. If the player was not traded, it is the same value as `team`. Therefore, this represents the team distribution post-trade.
+
+```{r}
+ggplot(nbasalary_team2, aes(x = salary, y = team)) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.1) +
+  labs(title = 'Salary Distribution by Team (Pre-Trade)', x = 'Salary', y = 'Team') +
+  scale_x_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(nbasalary_team2, aes(x = salary, y = team2)) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.1) +
+  labs(title = 'Salary Distribution by Team (Post-Trade)', x = 'Salary', y = 'Conference') +
+  scale_x_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+#FINISH TEAM NARRATION
+### Age
+```{r, include=FALSE}
+range(nbasalary$age)
+```
+The ages of NBA players range from 19 to 42, rookies to veterans. Let's explore whether the age of the player has an impact on the salary -- does salary increase with time spent in the league?
+```{r}
+ggplot(nbasalary, aes(x = age, y = salary)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "red3") +
+  labs(title = "Scatter Plot of Age vs Salary",
+       x = "Age",
+       y = "Salary") +
+    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+```{r}
+ggplot(nbasalary, aes(x = factor(age), y = salary)) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.1) +
+  labs(title = 'Salary Distribution by Age', x = 'Age', y = 'Salary') +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+There isn't a clear pattern to the effect of age on salary. It seems that regardless of age, the salary remains below ten million for most players though there is a weak positive relationship between the two variables - as seen from the correlation matrix - such that as age increases, age increases. In this plot, we have applied the LOESS (Locally Estimated Scatterplot Smoothing) method to better visualize the seemingly non-linear distribution. There appears to be a peak from around 26 to 34 for salary, but the data from players past the age of 35 is limited.
+
+On average, NBA players average about [4.5 years in the league](https://www.nba.com/nuggets/features/junior_bridgeman_20100610.html). Additionally majority of players enter their rookie year before the age of 25. Therefore, we can infer that those who exceed the average and maintain their presence in the league in their later years are star players whom outpace their peers. This may result in greater salary. Age is a factor to keep in mind when predicting salary, but as a note, it may be more ideal to have had a variable such as "Years in the League" to better determine longevity since not all players come to the league at the same age.
+
+Now that we have analyzed the relationships between some of our variables, we have a much more robust view on the impact of these variables on our outcome variable. It's time to begin constructing our models.
+
+# Model Set-Up
+To begin fitting prediction models to the data, we first have to complete the necessary steps of setting up the models. We will split the data into training and testing sets, create folds for k-fold cross validation, and create a recipe.
+
+## Splitting Data
+As mentioned, we need two distinct sets of data: training and testing. The training data will be used to train our models as the name suggests, while the testing data will strictly be used to test the accuracy of our model after training the models. 
+
+In our case, we will divide the data with a 70/30 split for training and testing, respectively. This is because we have a significant amount of observations for testing, however not quite enough to constitute an 80/20 split.
+```{r}
+set.seed(333)
+# splitting data
+nba_split <- initial_split(nbasalary, strata = salary, prop =.7)
+nba_train <- training(nba_split)
+nba_test <- testing(nba_split)
+```
+
+Let's verify the split:
+```{r}
+a <- nrow(nba_train)
+b <- nrow(nba_test)
+c <- (nrow(nba_train)/nrow(nbasalary)) * 100
+d <- (nrow(nba_test)/nrow(nbasalary)) * 100
+
+split_verify <- paste("There are ", a, " observations for the training set and ", b, " observations for the testing set. This gives us a ", c, "/", d, " split!")
+print(split_verify)
+```
+The data was correctly split!
+
+## *k*-fold Cross Validation
+The next step we take is to utilize k-fold cross validation. Stratified cross-validation allows for randomization and ensures that both the training and test set have the same proportion of the outcome variable, salary, as the original dataset does.
+
+```{r}
+# creating 10 folds
+nba_folds <- vfold_cv(nba_train, strata = salary, v = 5)
+```
+We created 5 folds to conduct k-fold stratified cross validation.
+
+## Building a Recipe
+Across all our models, we will be using the same predictors, conditions, and outcome. Thus, it is beneficial for us to create a universal recipe that can be applied to all our models, with minor adjustments made as necessary. Each model will utilize this recipe and apply its specific methods accordingly.
+
+The predictors we will use are the following: `position`, `age`, `gp`, `gs`, `mp`, `x3p_2`, `x2p_2`, `e_fg`, `ft_2`, `orb`, `drb`, `ast`, `stl`, `blk`, `tov`, `pf`, and `pts`. We purposely will exclude `team` given that each team has the same salary cap space, and as we saw, there was no significant effect of team on salary. 
+
+For `position`, we will make the variable into dummy variables because it is categorical.
+
+We have 17 predictors and our 1 outcome variable originally, but since we are dummy-coding `position` (which has 6 levels) we actually will be working with 21 predictors.
+
+```{r}
+nba_recipe <- 
+  recipe(salary ~ position + age + gp + gs + mp +
+                       x3p_2 + x2p_2 + e_fg + ft_2 + orb + drb +
+                       ast + stl + blk + tov + pf + pts,
+                     data = nba_train) %>%
+  # dummy-coding position
+  step_dummy(position) %>%
+  # normalization
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors())
+```
+
+```{r}
+prep(nba_recipe) %>% 
+  bake(new_data = nba_train) %>% 
+  head()
+```
+The set up for the model is done, and we can begin building the models. To save computing time, we will save the set-up to an RDA file.
+
+```{r}
+save(nba_folds, nba_recipe, nba_train, nba_test, file = "/Users/keya0/projects/nbasalary/models/nba_model_setup.rda")
+```
+
+# Model Building
+
+
+## Fitting Models
+6.
+```{r}
+# LINEAR REGRESSION
+# No tuning
+
+# K NEAREST NEIGHBORS
+load("/Users/keya0/projects/nbasalary/models/knn_tuned.rda")
+
+# RIDGE REGRESSION
+load("/Users/keya0/projects/nbasalary/models/ridge_tuned.rda")
+
+# LASSO REGRESSION
+load("/Users/keya0/projects/nbasalary/models/lasso_tuned.rda")
+
+# POLYNOMIAL REGRESSION
+load("/Users/keya0/projects/nbasalary/models/poly_tuned.rda")
+
+# ELASTIC NET
+load("/Users/keya0/projects/nbasalary/models/en_tuned.rda")
+
+# RANDOM FOREST
+load("/Users/keya0/projects/nbasalary/models/rf_tuned.rda")
+
+# BOOSTED TREES
+load("/Users/keya0/projects/nbasalary/models/boosted_tuned.rda")
+```
+
+## Autoplots
+```{r}
+autoplot(knn_tuned, metric = 'rmse') + theme_minimal()
+autoplot(ridge_tuned, metric = 'rmse') + theme_minimal()
+autoplot(lasso_tuned, metric = 'rmse') + theme_minimal()
+autoplot(poly_tuned, metric = 'rmse') + theme_minimal()
+autoplot(en_tuned, metric = 'rmse') + theme_minimal()
+autoplot(rf_tuned, metric = 'rmse') + theme_minimal()
+autoplot(boosted_tuned, metric = 'rmse') + theme_minimal()
+```
+```{r}
+
+```
+
+
+```{r}
+# collect_metrics() to collect the RMSE
+# slice() to save only RMSE
+
+# LINEAR REGRESSION
+# Fitting the linear regression to the folds first (since it had no tuning)
+lm_fit <- fit_resamples(lm_workflow, resamples = nba_folds)
+lm_rmse <- collect_metrics(lm_fit) %>%
+  slice(1)
+
+
+# RIDGE REGRESSION
+ridge_rmse <- collect_metrics(ridge_tuned) %>%
+  arrange(mean) %>%
+  slice(49)
+
+# LASSO REGRESSION
+lasso_rmse <- collect_metrics(lasso_tuned) %>%
+  arrange(mean) %>%
+  slice(35)
+
+# POLYNOMIAL REGRESSION
+poly_rmse <- collect_metrics(poly_tuned) %>%
+  arrange(mean) %>%
+  slice(6)
+
+# K NEAREST NEIGHBORS
+knn_rmse <- collect_metrics(knn_tuned) %>%
+  arrange(mean) %>%
+  slice(6)
+
+# ELASTIC NET
+elastic_rmse <- collect_metrics(en_tuned) %>%
+  arrange(mean) %>%
+  slice(73)
+
+# RANDOM FOREST
+rf_rmse <- collect_metrics(rf_tuned) %>%
+  arrange(mean) %>%
+  slice(513)
+
+# BOOSTED TREES
+boosted_rmse <- collect_metrics(boosted_tuned) %>%
+  arrange(mean) %>%
+  slice(126)
+```
+
+
+# Model Results
+```{r}
+# Creating a tibble of all the models and their RMSE
+final_compare_tibble <- tibble(Model = c("Linear Regression", "Ridge Regression", "Lasso Regression", "Polynomial Regression", "K Nearest Neighbors", "Elastic Net", "Random Forest", "Boosted Trees"), RMSE = c(lm_rmse$mean, ridge_rmse$mean, lasso_rmse$mean, poly_rmse$mean, knn_rmse$mean, elastic_rmse$mean, rf_rmse$mean, boosted_rmse$mean))
+
+# Arranging by lowest RMSE
+final_compare_tibble <- final_compare_tibble %>% 
+  arrange(RMSE)
+
+final_compare_tibble
+```
+
+# Conclusion
+
+# <a id="sources"></a> Sources
+The data utilized in this project is from the Kaggle dataset, ["NBA Player Salaries (2022-23 Season)"](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season/data?select=nba_salaries.csv), which was collected and shared by user [Jamie Welsh](https://www.kaggle.com/jamiewelsh2). The dataset was created through web scrapping [HoopsHype](https://hoopshype.com/) for player salaries and [Basketball Reference](https://www.basketball-reference.com/) for advanced basketball statistics.
+
+Information regarding the NBA and the statistical parameters used in the model was collected via the [official NBA website](nba.com).

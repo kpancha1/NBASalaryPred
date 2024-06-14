@@ -1,0 +1,5 @@
+"0","nbasalary %>%"
+"0","  ggplot(aes(y = forcats::fct_infreq(position))) +"
+"0","  geom_bar() +"
+"0","  theme_minimal() +"
+"0","  ylab(""Position"")"

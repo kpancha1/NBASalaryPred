@@ -1,0 +1,6 @@
+"0","ggplot(nbasalary_trade, aes(x = traded, y = salary)) +"
+"0","  geom_boxplot() +"
+"0","  labs(title = ""Box Plot of Salary by Traded Status"", x = ""Traded"", y = ""Salary"") +"
+"0","  scale_x_discrete(labels = c(""False"" = ""Not Traded"", ""True"" = ""Traded"")) +"
+"0","  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = ""M"")) +"
+"0","  theme_minimal()"

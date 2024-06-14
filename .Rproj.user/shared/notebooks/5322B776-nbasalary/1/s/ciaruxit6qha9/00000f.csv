@@ -1,0 +1,5 @@
+"0","nbasalary <- nbasalary %>%"
+"0","  select(player_name, salary, position, age, team, gp, gs, mp, x3p_2, x2p_2, "
+"0","         e_fg, ft_2, orb, drb, ast, stl, blk, tov, pf, pts) %>%"
+"0","  mutate(position = factor(position),"
+"0","         team = factor(team))"

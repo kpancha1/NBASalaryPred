@@ -1,0 +1,27 @@
+{
+    "id": "D91A529D",
+    "path": "~/projects/nbasalary/nbasalary.Rmd",
+    "project_path": "nbasalary.Rmd",
+    "type": "r_markdown",
+    "hash": "0",
+    "contents": "",
+    "dirty": true,
+    "created": 1717705721505.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "420,384",
+        "scrollLine": "414",
+        "last_setup_crc32": ""
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1718389799,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1718393170638,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,2 @@
+"0","rows_with_na <- nbasalary %>% filter(!complete.cases(.))"
+"0","print(rows_with_na)"

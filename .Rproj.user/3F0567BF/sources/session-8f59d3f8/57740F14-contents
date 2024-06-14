@@ -1,0 +1,261 @@
+---
+title: "PSTAT131 HW 4"
+output: html_document
+date: "2024-03-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = FALSE, message = FALSE}
+library(tidyverse)
+library(tidymodels)
+library(discrim)
+library(ggplot2)
+library(corrplot)
+library(ggthemes)
+library(tune)
+library(dials)
+library(themis)
+tidymodels_prefer()
+
+library(readxl)
+abalData <- read_excel("C:/Users/zarah/OneDrive/abalone_data.xlsx")
+abalData$age <- abalData$rings + 1.5
+
+titanicData <- read.csv("C:/Users/zarah/OneDrive/titanic.csv") %>%
+  mutate(survived = factor(survived, levels = c("Yes", "No"))) %>%
+  mutate(pclass = factor(pclass))
+
+set.seed(1543)
+```
+
+# Resampling
+
+## Section 1: Regression (abalone age)
+
+### Question 1:
+
+```{r}
+abal_split <- initial_split(abalData, strata = age, prop = 0.7)
+abal_train <- training(abal_split)
+abal_test <- testing(abal_split)
+abal_folds <- vfold_cv(abal_train, strata = age, v = 5)
+```
+
+```{r}
+abal_recipe <- recipe(age ~ .,  data = abal_train) %>%
+  step_rm(rings) %>%
+  step_dummy(type) %>%
+  step_interact(terms = ~ matches('type'):shucked_weight +
+                  longest_shell:diameter +
+                  shucked_weight:shell_weight) %>%
+  step_normalize(all_predictors())
+```
+
+### Question 2:
+
+In your own words, explain what we are doing when we perform k-fold cross-validation:
+
+-   What is k-fold cross-validation?
+
+    -   K fold cross-validation is the process of splitting up the training data set into k folds,  then training and testing occurs.
+        The model is trained on k-1 folds meaning that one fold is left out to test the data.
+
+-   Why should we use it, rather than simply comparing our model results on the entire training set?
+
+    -   Getting accurate measurements of model accuracy requires that we test on data that is unseen and hasn't been used to fit the model.
+        If we compared model results on the entire training that would we were testing the model on the same data that was used to train it and the results would likely show a high and false model accuracy.
+
+-   If we split the training set into two and used one of those two splits to evaluate/compare our models, what resampling method would we be using?
+
+    -   This would just be the validation set approach.
+
+### Question 3:
+
+
+```{r}
+knn_model <- nearest_neighbor(neighbors = tune()) %>%
+  set_mode("regression") %>%
+  set_engine("kknn")
+knn_wrkflow <- workflow() %>%
+  add_recipe(abal_recipe) %>%
+  add_model(knn_model)
+knn_grid <- grid_regular(neighbors(), levels = 10)
+
+lm_mod <- linear_reg() %>%
+  set_mode("regression") %>%
+  set_engine("lm")
+lm_wrkflow <- workflow() %>%
+  add_recipe(abal_recipe) %>%
+  add_model(lm_mod)
+
+en_mod <- linear_reg(mixture = tune(), penalty = tune()) %>%
+  set_mode("regression") %>%
+  set_engine("glmnet")
+en_wrkflow <- workflow() %>%
+  add_recipe(abal_recipe) %>%
+  add_model(en_mod)
+en_grid <- grid_regular(penalty(),
+                        mixture(range = c(0, 1)),
+                        levels = 10)
+```
+K nearest neighbors models fitted:
+5 folds * 10 levels = 50 models fitted
+
+Linear regression models fitted:
+5 folds -> 5 models fitted
+
+Elastic net linear regression models fitted:
+5 folds * 10 levels of mixture * 10 levels of penalty = 500 models fitted
+
+555 total models fitted.
+
+### Question 4:
+
+
+```{r}
+tune_neighbors_abal <- tune_grid(
+  knn_wrkflow,
+  resamples = abal_folds,
+  grid = knn_grid
+)
+
+tune_en_abal <- tune_grid(
+  en_wrkflow,
+  resamples = abal_folds,
+  grid = en_grid
+)
+
+tune_lm_abal <- lm_wrkflow %>%
+  fit_resamples(abal_folds)
+```
+
+### Question 5:
+
+```{r}
+collect_metrics(tune_neighbors_abal)
+collect_metrics(tune_lm_abal)
+collect_metrics(tune_en_abal)
+```
+```{r}
+best_knn_mod <- select_by_one_std_err(tune_neighbors_abal, metric = "rmse", neighbors)
+best_knn_mod
+best_en_mod <- select_by_one_std_err(tune_en_abal, metric = "rmse", mixture, penalty)
+best_en_mod
+best_lm_mod <- collect_metrics(tune_lm_abal)[-2,]
+best_lm_mod
+```
+The linear regression seems to have performed the best out of all the models that were fitted. It was the model with the lowest RMSE and the highest rsq value.
+
+### Question 6:
+
+
+```{r}
+lm_final_abal <- finalize_workflow(lm_wrkflow, best_lm_mod) %>%
+  fit(data = abal_train)
+
+augment(lm_final_abal, new_data = abal_test) %>%
+  rmse(truth = age, estimate = .pred)
+```
+The linear regression model did very well and actually performed better on the testing set than it did on average across folds of the training data. It got a 2.18 average rmse across folds and a 2.11 rmse with the testing set.
+
+## Section 2: Classification (Titanic survival)
+
+### Question 7:
+
+```{r}
+titanic_split <- initial_split(titanicData, strata = "survived", prop = 0.7)
+titanic_train <- training(titanic_split)
+titanic_test <- testing(titanic_split)
+titanic_folds <- vfold_cv(titanic_train, strata = "survived", v = 5)
+```
+
+### Question 8:
+
+
+```{r}
+titanic_recipe <- recipe(survived ~ pclass + age + sex + 
+                           sib_sp + parch + fare, titanic_train) %>%
+  step_impute_linear(age, impute_with = imp_vars(fare, sib_sp)) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_interact(terms = ~ starts_with('sex'):fare + age:fare) %>%
+  step_upsample(survived, over_ratio = 1)
+```
+
+### Questtion 9:
+
+
+```{r}
+knn_model_titan <- nearest_neighbor(neighbors = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("kknn")
+knn_wrkflow_titan <- workflow() %>%
+  add_recipe(titanic_recipe) %>%
+  add_model(knn_model_titan)
+
+log_mod_titan <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+log_wrkflow_titan <- workflow() %>%
+  add_recipe(titanic_recipe) %>%
+  add_model(log_mod_titan)
+
+en_mod_titan <- logistic_reg(mixture = tune(), penalty = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("glmnet")
+en_wrkflow_titan <- workflow() %>%
+  add_recipe(titanic_recipe) %>%
+  add_model(en_mod_titan)
+```
+
+
+### Question 10:
+
+
+```{r}
+tune_neighbors_titan <- tune_grid(
+  knn_wrkflow_titan,
+  resamples = titanic_folds,
+  grid = knn_grid
+)
+
+tune_en_titan <- tune_grid(
+  en_wrkflow_titan,
+  resamples = titanic_folds,
+  grid = en_grid
+)
+
+tune_log_titan <- log_wrkflow_titan %>%
+  fit_resamples(titanic_folds)
+```
+
+### Question 11:
+
+```{r}
+collect_metrics(tune_neighbors_titan)
+collect_metrics(tune_log_titan)
+collect_metrics(tune_en_titan)
+```
+```{r}
+best_knn_mod <- select_by_one_std_err(tune_neighbors_titan, metric = "roc_auc", neighbors)
+best_knn_mod
+best_en_mod <- select_by_one_std_err(tune_en_titan, metric = "roc_auc", mixture, penalty)
+best_en_mod
+best_log_mod <- collect_metrics(tune_log_titan)[-1,]
+best_log_mod
+```
+
+The logistic regression did the best having the highest roc auc score.
+
+### Question 12:
+
+```{r}
+log_final_titan <- finalize_workflow(log_wrkflow_titan, best_log_mod) %>%
+  fit(data = titanic_train)
+
+augment(log_final_titan, new_data = titanic_test) %>%
+  roc_auc(truth = survived, .pred_Yes)
+```
+The logistic regression did slightly worse on the test data, but it still did very well. It achieved an roc_auc value of 0.830 on the testing set and an roc_auc value of 0.839 across folds.

@@ -1,0 +1,3 @@
+"0","nbasalary <- nbasalary %>%"
+"0","  mutate(position = forcats::fct_collapse(position, "
+"0","                                          Combo = c('PG-SG', 'SF-SG', 'SG-PG', 'SF-PF')))"

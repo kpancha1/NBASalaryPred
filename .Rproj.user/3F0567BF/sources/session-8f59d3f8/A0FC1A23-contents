@@ -1,0 +1,228 @@
+---
+title: "nba_model_builds"
+output: html_document
+date: "2024-06-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Model Building
+```{r}
+load("/Users/keya0/projects/nbasalary/models/nba_model_setup.rda")
+```
+
+## Fitting Models
+1.
+```{r}
+# LINEAR REGRESSION 
+lm_model <- linear_reg() %>% 
+  set_engine("lm")
+
+# K NEAREST NEIGHBORS
+# Tuning the number of neighbors
+knn_model <- nearest_neighbor(neighbors = tune()) %>% 
+  set_mode("regression") %>% 
+  set_engine("kknn")
+
+# RIDGE REGRESSION
+ridge_spec <- linear_reg(mixture = 0, 
+                         penalty = tune()) %>% 
+  set_mode("regression") %>% 
+  set_engine("glmnet")
+
+# LASSO REGRESSION
+lasso_spec <- linear_reg(penalty = tune(), 
+                         mixture = 1) %>% 
+  set_mode("regression") %>% 
+  set_engine("glmnet")
+
+# POLYNOMIAL REGRESSION
+# Adjusting the recipe because the tuning parameter must be added in the recipe for polynomial regression
+poly_recipe <- nba_recipe %>% 
+  step_poly(age, gp, gs, mp, x3p_2, x2p_2, e_fg, ft_2, orb, drb, ast, stl, blk, tov, pf, pts, degree = tune())
+
+poly_spec <- linear_reg() %>% 
+  set_mode("regression") %>% 
+  set_engine("lm")
+
+# ELASTIC NET
+# Tuning penalty and mixture
+en_spec <- linear_reg(penalty = tune(), 
+                           mixture = tune()) %>% 
+  set_mode("regression") %>% 
+  set_engine("glmnet")
+
+# RANDOM FOREST
+# Tuning mtry (number of predictors), trees, and min_n (number of minimum values in each node)
+rf_spec <- rand_forest(mtry = tune(), 
+                       trees = tune(), 
+                       min_n = tune()) %>% 
+  set_engine("ranger", importance = "impurity") %>% 
+  set_mode("regression")
+
+# BOOSTED TREES
+# Tuning trees, learn_rate (the learning rate), and min_n
+boosted_spec <- boost_tree(mtry = tune(),
+                           trees = tune(),
+                           learn_rate = tune()) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+```
+2.
+```{r}
+# LINEAR REGRESSION 
+lm_workflow <- workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(nba_recipe)
+
+# K NEAREST NEIGHBORS
+knn_workflow <- workflow() %>% 
+  add_model(knn_model) %>% 
+  add_recipe(nba_recipe)
+
+# RIDGE REGRESSION
+ridge_workflow <- workflow() %>% 
+  add_recipe(nba_recipe) %>% 
+  add_model(ridge_spec)
+
+# LASSO REGRESSION
+lasso_workflow <- workflow() %>% 
+  add_recipe(nba_recipe) %>% 
+  add_model(lasso_spec)
+
+# POLYNOMIAL REGRESSION
+poly_wf <- workflow() %>% 
+  add_model(poly_spec) %>% 
+  add_recipe(poly_recipe)
+
+# ELASTIC NET
+en_workflow <- workflow() %>% 
+  add_recipe(nba_recipe) %>% 
+  add_model(en_spec)
+
+# RANDOM FOREST
+rf_workflow <- workflow() %>% 
+  add_recipe(nba_recipe) %>% 
+  add_model(rf_spec)
+
+# BOOSTED TREES
+boosted_workflow <- workflow() %>% 
+  add_recipe(nba_recipe) %>% 
+  add_model(boosted_spec)
+```
+
+3.
+```{r}
+# LINEAR REGRESSION 
+# No grid because no tuning parameters
+
+# K NEAREST NEIGHBORS
+knn_grid <- grid_regular(neighbors(range = c(1,15)), 
+                         levels = 5)
+
+# RIDGE REGRESSION
+penalty_grid <- grid_regular(penalty(range = c(-5, 5)), 
+                             levels = 50)
+
+# LASSO REGRESSION
+# Same grid as ridge
+
+# POLYNOMIAL REGRESSION
+degree_grid <- grid_regular(degree(range = c(1,10)), 
+                            levels = 10)
+
+# ELASTIC NET
+en_grid <- grid_regular(penalty(range = c(1, 10)), 
+                        mixture(range = c(0,1)), 
+                        levels = 10)
+
+# RANDOM FOREST
+rf_grid <- grid_regular(mtry(range = c(1, 21)),
+                        trees(range = c(200, 800)),
+                        min_n(range = c(5, 20)), 
+                        levels = 5)
+
+# BOOSTED TREES
+boosted_grid <- grid_regular(mtry(range = c(1, 21)),
+                             trees(range = c(200, 800)), 
+                             learn_rate(range = c(-5, -1)),
+                             levels = 5)
+```
+
+4.
+```{r}
+# LINEAR REGRESSION 
+# No tuning
+
+# K NEAREST NEIGHBORS
+knn_tuned <- tune_grid(
+  knn_workflow,
+  resamples = nba_folds,
+  grid = knn_grid)
+
+# RIDGE REGRESSION
+ridge_tuned <- tune_grid(
+  ridge_workflow,
+  resamples = nba_folds,
+  grid = penalty_grid)
+
+# LASSO REGRESSION
+lasso_tuned <- tune_grid(
+  lasso_workflow,
+  resamples = nba_folds,
+  grid = penalty_grid)
+
+# POLYNOMIAL REGRESSION
+poly_tuned <- tune_grid(
+  poly_wf,
+  resamples = nba_folds,
+  grid = degree_grid)
+
+# ELASTIC NET
+en_tuned <- tune_grid(
+  en_workflow,
+  resamples = nba_folds,
+  grid = en_grid)
+
+# RANDOM FOREST
+rf_tuned <- tune_grid(
+  rf_workflow,
+  resamples = nba_folds,
+  grid = rf_grid)
+
+# BOOSTED TREES
+boosted_tuned <- tune_grid(
+  boosted_workflow,
+  resamples = nba_folds,
+  grid = boosted_grid)
+```
+
+5. 
+```{r}
+# LINEAR REGRESSION 
+# No tuning
+
+# K NEAREST NEIGHBORS
+save(knn_tuned, file = "/Users/keya0/projects/nbasalary/models/knn_tuned.rda")
+
+# RIDGE REGRESSION
+save(ridge_tuned, file = "/Users/keya0/projects/nbasalary/models/ridge_tuned.rda")
+
+# LASSO REGRESSION
+save(lasso_tuned, file = "/Users/keya0/projects/nbasalary/models/lasso_tuned.rda")
+
+# POLYNOMIAL REGRESSION
+save(poly_tuned, file = "/Users/keya0/projects/nbasalary/models/poly_tuned.rda")
+
+# ELASTIC NET
+save(en_tuned, file = "/Users/keya0/projects/nbasalary/models/en_tuned.rda")
+
+# RANDOM FOREST
+save(rf_tuned, file = "/Users/keya0/projects/nbasalary/models/rf_tuned.rda")
+
+# BOOSTED TREES
+save(boosted_tuned, file = "/Users/keya0/projects/nbasalary/models/boosted_tuned.rda")
+
+```

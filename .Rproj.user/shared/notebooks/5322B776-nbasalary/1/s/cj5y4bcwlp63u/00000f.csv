@@ -1,0 +1,5 @@
+"0","nbasalary %>%"
+"0","  select_if(is.numeric) %>%"
+"0","  cor() %>%"
+"0","  corrplot(type = 'full', diag = FALSE, "
+"0","           method = 'color', addCoef.col = ""black"", number.cex = 0.5)"

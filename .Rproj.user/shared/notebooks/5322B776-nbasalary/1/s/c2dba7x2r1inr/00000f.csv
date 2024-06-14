@@ -1,0 +1,6 @@
+"0","# creating new dataset with variable ""traded"""
+"0","nbasalary_trade <- nbasalary %>%"
+"0","  mutate(traded = str_detect(team, ""/"")) %>%"
+"0","  select(player_name, salary, traded, everything())"
+"0",""
+"0","head(nbasalary_trade)"

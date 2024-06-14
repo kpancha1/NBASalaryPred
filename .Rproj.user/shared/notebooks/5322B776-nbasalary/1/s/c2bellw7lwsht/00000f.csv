@@ -1,0 +1,3 @@
+"0","prep(nba_recipe) %>% "
+"0","  bake(new_data = nba_train) %>% "
+"0","  head()"

@@ -1,7 +1,7 @@
-"0","en_tuned <- tune_grid(
-  en_workflow,
+"0","lasso_tuned <- tune_grid(
+  lasso_workflow,
   resamples = nba_folds,
-  grid = en_grid)
+  grid = penalty_grid)
 "
 "1","→ [33m[1mA[22m[39m | [33mwarning[39m: [38;5;232mA correlation computation is required, but `estimate` is constant and has 0 standard deviation, resulting in a divide by 0
                error. `NA` will be returned.[39m

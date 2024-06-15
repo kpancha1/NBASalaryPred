@@ -1,0 +1,6 @@
+"0","rmse_comparison <- tibble(Model = c(""Linear Regression"", ""K Nearest Neighbors"", ""Ridge Regression"", ""Lasso Regression"", ""Polynomial Regression"", ""Elastic Net"", ""Random Forest"", ""Boosted Trees""), RMSE = c(lm_rmse, knn_rmse, ridge_rmse, lasso_rmse, poly_rmse, en_rmse, rf_rmse, boosted_rmse))"
+"0",""
+"0","rmse_comparison <- rmse_comparison %>% "
+"0","  arrange(RMSE)"
+"0",""
+"0","rmse_comparison"

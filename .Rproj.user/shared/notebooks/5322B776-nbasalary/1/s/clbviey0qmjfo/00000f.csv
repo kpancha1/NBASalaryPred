@@ -1,5 +1,0 @@
-"0","library(cowplot)
-"
-"2","Error in library(package, pos = pos, lib.loc = lib.loc, character.only = TRUE,  : 
-  there is no package called ‘cowplot’
-"

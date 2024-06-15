@@ -1,0 +1,6 @@
+"0","ggplot(nbasalary_team2, aes(x = salary, y = team2)) +"
+"0","  geom_boxplot() +"
+"0","  geom_jitter(alpha = 0.1) +"
+"0","  labs(title = 'Salary Distribution by Team (Post-Trade)', x = 'Salary', y = 'Conference') +"
+"0","  scale_x_continuous(labels = scales::dollar_format()) +"
+"0","  theme_minimal()"

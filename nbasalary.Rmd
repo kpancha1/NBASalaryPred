@@ -152,7 +152,7 @@ To get a better idea of our data, we must create some visualizations. Firstly, w
 ```{r}
 ggplot(nbasalary, aes(salary)) +
   geom_histogram(binwidth = 1000000, fill='blue4') +
-  scale_x_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  scale_x_continuous(labels = scales::dollar_format()) +
   labs(
     title = "Distribution of NBA Salaries (2022-2023 Season)",
     x = "Salary (in millions of USD)",
@@ -186,7 +186,7 @@ ggplot(nbasalary, aes(x = pts, y = salary)) +
   labs(title = "Scatter Plot of Points vs Salary",
        x = "Points per Game",
        y = "Salary (in millions of USD)") +
-    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+    scale_y_continuous(labels = scales::dollar_format()) +
   theme_minimal()
 ```
 We intuitively can understand why the relationship between the two would be so strongly positive. The more points a player averages per game, the more they contribute to the team and make an impact on the game. Therefore, a higher salary would be merited. However, a high points per game does not necessarily mean that the player is efficient with the ball. The correlation matrix reveals that points per game and the efficiency metrics have weak positive correlations. Let's take a look at specifically points per game vs. EFG%:
@@ -207,7 +207,7 @@ ggplot(nbasalary, aes(x = e_fg, y = salary)) +
   labs(title = "Scatter Plot of EFG% vs Salary",
        x = "Efficent Field Goal Percentage",
        y = "Salary (in millions of USD)") +
-  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  scale_y_continuous(labels = scales::dollar_format()) +
   theme_minimal()
 ```
 The tapering of EFG% is shown here as well. The EFG% does not impact salary heavily at all; the players with the highest EFG% are actually do not see that reflected by their low salary. This makes sense given our previous investigation of EFG% and points per game. We can conclude that EFG% is not something that is heavily accounted for when determining salaries of players.
@@ -238,7 +238,7 @@ nbasalary %>%
     geom_boxplot() +
     geom_jitter(alpha = 0.1) +
     labs(title = "Box Plot of Salary by Position", x = "Position", y = "Salary") +
-    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+    scale_y_continuous(labels = scales::dollar_format()) +
     theme_minimal()
 ```
 The players that play more than one role earn significantly more. The position of point guard also trends towards a higher salary.
@@ -254,7 +254,7 @@ nbasalary %>%
     labs(title = "Mean Salary by Position",
          x = "Position",
          y = "Mean Salary") +
-    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+    scale_y_continuous(labels = scales::dollar_format()) +
     theme_minimal()
 ```
 Just as we observed in the previous graph, the "Combo" players earn on average significantly more, with a mean around almost 15 million dollars. The point guards earn around 12 million on average as the second highest, while the position with the lowest salary on average is the shooting guard with about 6 million dollars. Note that these averages include the "outliers" because those significantly higher salaries are important to our model too thus we will not exclude them.
@@ -275,50 +275,26 @@ nbasalary_trade <- nbasalary %>%
 
 head(nbasalary_trade)
 ```
-
 ```{r}
-ggplot(nbasalary_trade, aes(x = traded, y = salary)) +
-  geom_boxplot() +
-  labs(title = "Box Plot of Salary by Traded Status", x = "Traded", y = "Salary") +
-  scale_x_discrete(labels = c("False" = "Not Traded", "True" = "Traded")) +
-  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+percentage_traded <- nbasalary_trade %>%
+  summarise(
+    total_players = n(),
+    traded_players = sum(traded == TRUE),
+    percentage_traded = (traded_players / total_players) * 100
+  )
+
+print(percentage_traded)
+```
+Around 13% of players were traded in the 2022-2023 season. Let's see if this status has any impact on the response variable, salary.
+```{r}
+ggplot(nbasalary_trade, aes(x = salary, fill = factor(traded))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Salary by Traded Status", x = "Salary", fill = "Traded") +
+  scale_x_continuous(labels = scales::dollar_format()) +
   theme_minimal()
 ```
+The density plot shows that the distributions are very similar - both are unimodal and right-skewed. There appears to be slightly more variability in salary for players that were traded, as the peak is less narrow. The graph indicates that players who are traded are more likely to have a ten million to around 25 million salary than those who weren't.  These kinds of players are well-paid role players who can make a significant difference in a team's roster, but wouldn't break the budget like star player would. This would make them a high-valued trade option. However, the difference between the two populations are not significant enough to warrant including the variable `traded` in our final prediction dataset, so we will keep our data set the same.
 
-#### Creating `team2` Variable
-Some players have, over the course of the 2022-2023 season, been traded to another team. To indicate this, the team variable will be separated into two variables `team` and `team2` where the `team` value is the team before the slash, and `team2` value is the team after the slash (the second team the player played for).
-
-If the player has not played for more than one team, then `team2` value will be the same as the `team` value.
-```{r}
-nbasalary_team2 <- nbasalary %>%
-  separate(team, into = c("team", "team2"), sep = "/") %>%
-  mutate(team2 = ifelse(is.na(team2), team, team2)) %>%
-  select(player_name, salary, team, team2, everything())
-
-head(nbasalary_team2)
-```
-
-The new variable:
-* `team2`: If the player was traded, the second team they played for in the 2022-2023 season. If the player was not traded, it is the same value as `team`. Therefore, this represents the team distribution post-trade.
-
-```{r}
-ggplot(nbasalary_team2, aes(x = salary, y = team)) +
-  geom_boxplot() +
-  geom_jitter(alpha = 0.1) +
-  labs(title = 'Salary Distribution by Team (Pre-Trade)', x = 'Salary', y = 'Team') +
-  scale_x_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
-  theme_minimal()
-```
-
-```{r}
-ggplot(nbasalary_team2, aes(x = salary, y = team2)) +
-  geom_boxplot() +
-  geom_jitter(alpha = 0.1) +
-  labs(title = 'Salary Distribution by Team (Post-Trade)', x = 'Salary', y = 'Conference') +
-  scale_x_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
-  theme_minimal()
-```
-#FINISH TEAM NARRATION
 ### Age
 ```{r, include=FALSE}
 range(nbasalary$age)
@@ -331,7 +307,7 @@ ggplot(nbasalary, aes(x = age, y = salary)) +
   labs(title = "Scatter Plot of Age vs Salary",
        x = "Age",
        y = "Salary") +
-    scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+    scale_y_continuous(labels = scales::dollar_format()) +
   theme_minimal()
 ```
 ```{r}
@@ -339,7 +315,7 @@ ggplot(nbasalary, aes(x = factor(age), y = salary)) +
   geom_boxplot() +
   geom_jitter(alpha = 0.1) +
   labs(title = 'Salary Distribution by Age', x = 'Age', y = 'Salary') +
-  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = "M")) +
+  scale_y_continuous(labels = scales::dollar_format()) +
   theme_minimal()
 ```
 There isn't a clear pattern to the effect of age on salary. It seems that regardless of age, the salary remains below ten million for most players though there is a weak positive relationship between the two variables - as seen from the correlation matrix - such that as age increases, age increases. In this plot, we have applied the LOESS (Locally Estimated Scatterplot Smoothing) method to better visualize the seemingly non-linear distribution. There appears to be a peak from around 26 to 34 for salary, but the data from players past the age of 35 is limited.
@@ -418,114 +394,86 @@ save(nba_folds, nba_recipe, nba_train, nba_test, file = "/Users/keya0/projects/n
 ```
 
 # Model Building
+Because the data does not have a large number of observations, we were able to utilize eight different models: linear regression, k-nearest neighbors, ridge regression, lasso regression, polynomial regression, elastic net, random forest, and boosted trees. Due to the amount of computing power needed, the models were tuned in a separate R-markdown file, nba_model_building.rmd, which can be accessed in the [Github repository for this project](https://github.com/kpancha1/NBASalaryPred). In this RMD, the tuned models were each saved as an RDA and will be loaded in to analyze the results (these RDA's can also be found within the Github repository).
 
+As a metric, we have chosen RMSE (root mean-squared error) to measure accuracy of the regression models. The RMSE is a measure of the average magnitude of the error between predicted values and observed values, with errors being squared before averaging and then taking the square root. Thus, a lower RMSE indicates a more accurate prediction!
 
-## Fitting Models
-6.
+## General Process
+Aside from linear regression (does not require tuning), the models were each fit utilizing the following steps:
+1. **Specify model**: Define the type of model. For all models, we set the mode for the model as 'regression' and specified the engine.
+2. **Set workflow**: Create the workflow for the model, by adding the model and the pre-established recipe to the workflow.
+*Note*: The linear regression model did not require the following steps of tuning models.
+3. **Create tuning grid**: Define the tuning grid. This involves specifying the hyperparameters to be tuned and setting the ranges and levels for each parameter. These ranges are optimized through experimenting with different conditions.
+4. **Tune model**: Use the defined tuning grid to tune the model.
+5. **Find best model and finalize**: Identify and select the most accurate model from the tuning grid using the metric RMSE. Then finalize the workflow with the best hyperparameters obtained.
+6. **Fit model**: Apply the finalized workflow to fit the model using the entire training dataset.
+
+## Loading Models
+Let's load in the tuned models, the best of each model, and the RMSE values of the best models:
 ```{r}
 # LINEAR REGRESSION
-# No tuning
+load("/Users/keya0/projects/nbasalary/models/lm.rda")
 
 # K NEAREST NEIGHBORS
-load("/Users/keya0/projects/nbasalary/models/knn_tuned.rda")
+load("/Users/keya0/projects/nbasalary/models/knn.rda")
 
 # RIDGE REGRESSION
-load("/Users/keya0/projects/nbasalary/models/ridge_tuned.rda")
+load("/Users/keya0/projects/nbasalary/models/ridge.rda")
 
 # LASSO REGRESSION
-load("/Users/keya0/projects/nbasalary/models/lasso_tuned.rda")
+load("/Users/keya0/projects/nbasalary/models/lasso.rda")
 
 # POLYNOMIAL REGRESSION
-load("/Users/keya0/projects/nbasalary/models/poly_tuned.rda")
+load("/Users/keya0/projects/nbasalary/models/poly.rda")
 
 # ELASTIC NET
-load("/Users/keya0/projects/nbasalary/models/en_tuned.rda")
+load("/Users/keya0/projects/nbasalary/models/en.rda")
 
 # RANDOM FOREST
-load("/Users/keya0/projects/nbasalary/models/rf_tuned.rda")
+load("/Users/keya0/projects/nbasalary/models/rf.rda")
 
 # BOOSTED TREES
-load("/Users/keya0/projects/nbasalary/models/boosted_tuned.rda")
+load("/Users/keya0/projects/nbasalary/models/boosted.rda")
 ```
 
 ## Autoplots
+### Lasso Regression
 ```{r}
-autoplot(knn_tuned, metric = 'rmse') + theme_minimal()
-autoplot(ridge_tuned, metric = 'rmse') + theme_minimal()
 autoplot(lasso_tuned, metric = 'rmse') + theme_minimal()
-autoplot(poly_tuned, metric = 'rmse') + theme_minimal()
+```
+Lasso regression, or Least Absolute Shrinkage and Selection Operator, is a linear regression technique that adds a penalty term to the ordinary least squares (OLS) objective function. Lasso regression encourages sparse solutions by shrinking less important predictors towards zero, effectively performing feature selection. It's good for irrelevant variables and shrinks some variables all the way down to zero. We can see that the RMSE drops significantly around 1e+04 to 1e+06 after a platuea - this suggests a critical point where increasing the penalty further leads to a substantial improvement in model performance. The penalty sufficiently penalizes less important predictors, effectively performing feature selection and reducing model complexity. The exponential rise after is due to excessively high penalties lead to overly sparse models, where important predictors are also penalized and coefficients shrink too much.
+
+### Elastic Net
+```{r}
 autoplot(en_tuned, metric = 'rmse') + theme_minimal()
+```
+The elastic net tuning plot shows that the RMSE is lowest prior to and at 1e+06 before shooting up and plateauing. This model has similar issues of overfitting with the penalty as with lasso regression.
+### Random Forest
+```{r}
 autoplot(rf_tuned, metric = 'rmse') + theme_minimal()
+```
+For random forest, we see that there is not a great degree of variation in RMSE across the number of trees and node size. The greatest impact comes from the node size. It appears that a smaller node size gives an overall lower RMSE.
+### Boosted Trees
+```{r}
 autoplot(boosted_tuned, metric = 'rmse') + theme_minimal()
 ```
-```{r}
-
-```
-
-
-```{r}
-# collect_metrics() to collect the RMSE
-# slice() to save only RMSE
-
-# LINEAR REGRESSION
-# Fitting the linear regression to the folds first (since it had no tuning)
-lm_fit <- fit_resamples(lm_workflow, resamples = nba_folds)
-lm_rmse <- collect_metrics(lm_fit) %>%
-  slice(1)
-
-
-# RIDGE REGRESSION
-ridge_rmse <- collect_metrics(ridge_tuned) %>%
-  arrange(mean) %>%
-  slice(49)
-
-# LASSO REGRESSION
-lasso_rmse <- collect_metrics(lasso_tuned) %>%
-  arrange(mean) %>%
-  slice(35)
-
-# POLYNOMIAL REGRESSION
-poly_rmse <- collect_metrics(poly_tuned) %>%
-  arrange(mean) %>%
-  slice(6)
-
-# K NEAREST NEIGHBORS
-knn_rmse <- collect_metrics(knn_tuned) %>%
-  arrange(mean) %>%
-  slice(6)
-
-# ELASTIC NET
-elastic_rmse <- collect_metrics(en_tuned) %>%
-  arrange(mean) %>%
-  slice(73)
-
-# RANDOM FOREST
-rf_rmse <- collect_metrics(rf_tuned) %>%
-  arrange(mean) %>%
-  slice(513)
-
-# BOOSTED TREES
-boosted_rmse <- collect_metrics(boosted_tuned) %>%
-  arrange(mean) %>%
-  slice(126)
-```
-
+As we can see, the greatest impact comes from learning rate. As it increases, the RMSE decreases dramatically. The number of trees are also significant, as the higher the number of trees, the greater the RMSE across all learning rates. A higher learning rate, as the name suggests, accelerates the model's learning process. However, we must be sure to keep the rates smaller (less than or equal to 0.1) to avoid generalization by reducing the depth of training.
 
 # Model Results
+The top 4 models - the models with the lowest RMSE - are random forest, boosted trees, elastic net, and lasso regression as seen in the table below. These are the models discussed more in depth in regards to tuning within the autoplots section. The most complex models have the lowest RMSE, which implies that the data in non-linear and requires greater dimensionality. There is a significant increase in RMSE between random forest/boosted trees and elastic net/lasso regression.
 ```{r}
-# Creating a tibble of all the models and their RMSE
-final_compare_tibble <- tibble(Model = c("Linear Regression", "Ridge Regression", "Lasso Regression", "Polynomial Regression", "K Nearest Neighbors", "Elastic Net", "Random Forest", "Boosted Trees"), RMSE = c(lm_rmse$mean, ridge_rmse$mean, lasso_rmse$mean, poly_rmse$mean, knn_rmse$mean, elastic_rmse$mean, rf_rmse$mean, boosted_rmse$mean))
+rmse_comparison <- tibble(Model = c("Linear Regression", "K Nearest Neighbors", "Ridge Regression", "Lasso Regression", "Polynomial Regression", "Elastic Net", "Random Forest", "Boosted Trees"), RMSE = c(lm_rmse, knn_rmse, ridge_rmse, lasso_rmse, poly_rmse, en_rmse, rf_rmse, boosted_rmse))
 
-# Arranging by lowest RMSE
-final_compare_tibble <- final_compare_tibble %>% 
+rmse_comparison <- rmse_comparison %>% 
   arrange(RMSE)
 
-final_compare_tibble
+rmse_comparison
 ```
+
 
 # Conclusion
 
-# <a id="sources"></a> Sources
+# <a id="sources">Sources</a>
 The data utilized in this project is from the Kaggle dataset, ["NBA Player Salaries (2022-23 Season)"](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season/data?select=nba_salaries.csv), which was collected and shared by user [Jamie Welsh](https://www.kaggle.com/jamiewelsh2). The dataset was created through web scrapping [HoopsHype](https://hoopshype.com/) for player salaries and [Basketball Reference](https://www.basketball-reference.com/) for advanced basketball statistics.
 
 Information regarding the NBA and the statistical parameters used in the model was collected via the [official NBA website](nba.com).

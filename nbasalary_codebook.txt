@@ -1,0 +1,34 @@
+Predicting NBA Salaries: Codebook
+
+List of variables that are present in the final version of the nbasalary dataset and used for regression prediction modeling:
+
+Response Variable:
+
+* `salary`: The 2022-2023 salary for each player in US dollars.
+
+Predictor Variables:
+
+* `position`: The [position](https://jr.nba.com/basketball-positions/) of each player with the unique values:
+    + `PG`: point guard
+    + `PF`: point forward
+    + `SG`: shooting guard
+    + `SF`: small forward
+    + `C`: center
+    +  `Combo`: a combination of two of the above (e.g. `SF-SG`)
+* `age`: The age of each player.
+* `team`: The team (or first team if multiple) played for in the 2022-23 season. Therefore, this represents the team distribution pre-trade.
+* `gp`: The number of games played.
+* `gs`: The number of games started.
+* `mp`: The number of minutes per game for each player.
+* `3p_2`: The three-point percentage.
+* `2p_2`: The two-point percentage.
+* `efg_2`: The effective field goal percentage. This statistic differs from the field goal percentage in that it adjusts field goal percentage to account for the fact that three-point field goals count for three points, while all other field goals only count for two points.
+* `ft_2`: The free-throw percentage.
+* `orb`: The number of offensive rebounds per game.
+* `drb`: The number of defensive rebounds per game.
+* `ast`: The number of assists per game.
+* `stl`: The number of steals per game.
+* `blk`: The number of blocks per game.
+* `tov`: The number of turnovers per game.
+* `pf`: The number of personal fouls per game.
+* `pts`: The points per game.

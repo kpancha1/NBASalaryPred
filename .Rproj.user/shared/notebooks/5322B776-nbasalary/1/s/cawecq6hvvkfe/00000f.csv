@@ -1,6 +1,0 @@
-"0","ggplot(nbasalary, aes(x = factor(age), y = salary)) +"
-"0","  geom_boxplot() +"
-"0","  geom_jitter(alpha = 0.1) +"
-"0","  labs(title = 'Salary Distribution by Age', x = 'Age', y = 'Salary') +"
-"0","  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, suffix = ""M"")) +"
-"0","  theme_minimal()"

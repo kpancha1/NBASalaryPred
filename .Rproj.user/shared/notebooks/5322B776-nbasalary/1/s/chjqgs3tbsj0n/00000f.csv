@@ -1,0 +1,8 @@
+"0","percentage_traded <- nbasalary_trade %>%"
+"0","  summarise("
+"0","    total_players = n(),"
+"0","    traded_players = sum(traded == TRUE),"
+"0","    percentage_traded = (traded_players / total_players) * 100"
+"0","  )"
+"0",""
+"0","print(percentage_traded)"

@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Model Building
 ```{r}
+set.seed(222)
 load("/Users/keya0/projects/nbasalary/models/nba_model_setup.rda")
 ```
 
@@ -21,7 +22,6 @@ lm_model <- linear_reg() %>%
   set_engine("lm")
 
 # K NEAREST NEIGHBORS
-# Tuning the number of neighbors
 knn_model <- nearest_neighbor(neighbors = tune()) %>% 
   set_mode("regression") %>% 
   set_engine("kknn")
@@ -39,7 +39,7 @@ lasso_spec <- linear_reg(penalty = tune(),
   set_engine("glmnet")
 
 # POLYNOMIAL REGRESSION
-# Adjusting the recipe because the tuning parameter must be added in the recipe for polynomial regression
+# adding tuning parameter in recipe
 poly_recipe <- nba_recipe %>% 
   step_poly(age, gp, gs, mp, x3p_2, x2p_2, e_fg, ft_2, orb, drb, ast, stl, blk, tov, pf, pts, degree = tune())
 
@@ -48,27 +48,24 @@ poly_spec <- linear_reg() %>%
   set_engine("lm")
 
 # ELASTIC NET
-# Tuning penalty and mixture
 en_spec <- linear_reg(penalty = tune(), 
                            mixture = tune()) %>% 
   set_mode("regression") %>% 
   set_engine("glmnet")
 
 # RANDOM FOREST
-# Tuning mtry (number of predictors), trees, and min_n (number of minimum values in each node)
 rf_spec <- rand_forest(mtry = tune(), 
                        trees = tune(), 
                        min_n = tune()) %>% 
-  set_engine("ranger", importance = "impurity") %>% 
-  set_mode("regression")
+  set_mode("regression") %>% 
+  set_engine("ranger", importance = "impurity")
 
 # BOOSTED TREES
-# Tuning trees, learn_rate (the learning rate), and min_n
 boosted_spec <- boost_tree(mtry = tune(),
                            trees = tune(),
                            learn_rate = tune()) %>%
-  set_engine("xgboost") %>%
-  set_mode("regression")
+  set_mode("regression") %>%
+  set_engine("xgboost")
 ```
 2.
 ```{r}
@@ -115,19 +112,16 @@ boosted_workflow <- workflow() %>%
 
 3.
 ```{r}
-# LINEAR REGRESSION 
-# No grid because no tuning parameters
-
 # K NEAREST NEIGHBORS
 knn_grid <- grid_regular(neighbors(range = c(1,15)), 
                          levels = 5)
 
 # RIDGE REGRESSION
-penalty_grid <- grid_regular(penalty(range = c(-5, 5)), 
+penalty_grid <- grid_regular(penalty(range = c(1, 6)), 
                              levels = 50)
 
 # LASSO REGRESSION
-# Same grid as ridge
+# same as ridge
 
 # POLYNOMIAL REGRESSION
 degree_grid <- grid_regular(degree(range = c(1,10)), 
@@ -142,20 +136,17 @@ en_grid <- grid_regular(penalty(range = c(1, 10)),
 rf_grid <- grid_regular(mtry(range = c(1, 21)),
                         trees(range = c(200, 800)),
                         min_n(range = c(5, 20)), 
-                        levels = 5)
+                        levels = 6)
 
 # BOOSTED TREES
 boosted_grid <- grid_regular(mtry(range = c(1, 21)),
                              trees(range = c(200, 800)), 
                              learn_rate(range = c(-5, -1)),
-                             levels = 5)
+                             levels = 6)
 ```
 
 4.
 ```{r}
-# LINEAR REGRESSION 
-# No tuning
-
 # K NEAREST NEIGHBORS
 knn_tuned <- tune_grid(
   knn_workflow,
@@ -178,7 +169,8 @@ lasso_tuned <- tune_grid(
 poly_tuned <- tune_grid(
   poly_wf,
   resamples = nba_folds,
-  grid = degree_grid)
+  grid = degree_grid,
+  metrics = metric_set(yardstick::rmse))
 
 # ELASTIC NET
 en_tuned <- tune_grid(
@@ -199,30 +191,91 @@ boosted_tuned <- tune_grid(
   grid = boosted_grid)
 ```
 
-5. 
+5.
 ```{r}
-# LINEAR REGRESSION 
-# No tuning
+lm_fit <- fit_resamples(lm_workflow, resamples = nba_folds)
+
+lm_rmse <- lm_fit %>% 
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  pull(mean)
+
+knn_best <- select_best(knn_tuned, metric = 'rmse')
+knn_rmse <- knn_tuned %>% 
+  collect_metrics() %>% 
+  filter(.config == knn_best$.config, .metric == "rmse") %>% 
+  pull(mean)
+
+ridge_best <- select_best(ridge_tuned, metric = 'rmse')
+ridge_rmse <- ridge_tuned %>% 
+  collect_metrics() %>% 
+  filter(.config == ridge_best$.config, .metric == "rmse") %>% 
+  pull(mean)
+
+lasso_best <- select_best(lasso_tuned, metric = 'rmse')
+lasso_rmse <- lasso_tuned %>% 
+  collect_metrics() %>% 
+  filter(.config == lasso_best$.config, .metric == "rmse") %>% 
+  pull(mean)
+
+poly_best <- select_best(poly_tuned, metric = 'rmse')
+poly_rmse <- poly_tuned %>% 
+  collect_metrics() %>% 
+  filter(.config == poly_best$.config, .metric == "rmse") %>% 
+  pull(mean)
+
+en_best <- select_best(en_tuned, metric = 'rmse')
+en_rmse <- en_tuned %>% 
+  collect_metrics() %>% 
+  filter(.config == en_best$.config, .metric == "rmse") %>% 
+  pull(mean)
+
+rf_best <- select_best(rf_tuned, metric = 'rmse')
+rf_rmse <- rf_tuned %>% 
+  collect_metrics() %>% 
+  filter(.config == rf_best$.config, .metric == "rmse") %>% 
+  pull(mean)
+
+boosted_best <- select_best(boosted_tuned, metric = 'rmse')
+boosted_rmse <- boosted_tuned %>% 
+  collect_metrics() %>% 
+  filter(.config == boosted_best$.config, .metric == "rmse") %>% 
+  pull(mean)
+```
+
+
+```{r}
+# LINEAR REGRESSION
+save(lm_fit, lm_rmse, file = "/Users/keya0/projects/nbasalary/models/lm.rda")
 
 # K NEAREST NEIGHBORS
-save(knn_tuned, file = "/Users/keya0/projects/nbasalary/models/knn_tuned.rda")
+save(knn_tuned, knn_best, knn_rmse, file = "/Users/keya0/projects/nbasalary/models/knn.rda")
 
 # RIDGE REGRESSION
-save(ridge_tuned, file = "/Users/keya0/projects/nbasalary/models/ridge_tuned.rda")
+save(ridge_tuned, ridge_best, ridge_rmse, file = "/Users/keya0/projects/nbasalary/models/ridge.rda")
 
 # LASSO REGRESSION
-save(lasso_tuned, file = "/Users/keya0/projects/nbasalary/models/lasso_tuned.rda")
+save(lasso_tuned, lasso_best, lasso_rmse, file = "/Users/keya0/projects/nbasalary/models/lasso.rda")
 
 # POLYNOMIAL REGRESSION
-save(poly_tuned, file = "/Users/keya0/projects/nbasalary/models/poly_tuned.rda")
+save(poly_tuned, poly_best, poly_rmse, file = "/Users/keya0/projects/nbasalary/models/poly.rda")
 
 # ELASTIC NET
-save(en_tuned, file = "/Users/keya0/projects/nbasalary/models/en_tuned.rda")
+save(en_tuned, en_best, en_rmse, file = "/Users/keya0/projects/nbasalary/models/en.rda")
 
 # RANDOM FOREST
-save(rf_tuned, file = "/Users/keya0/projects/nbasalary/models/rf_tuned.rda")
+save(rf_tuned, rf_best, rf_rmse, file = "/Users/keya0/projects/nbasalary/models/rf.rda")
 
 # BOOSTED TREES
-save(boosted_tuned, file = "/Users/keya0/projects/nbasalary/models/boosted_tuned.rda")
+save(boosted_tuned, boosted_best, boosted_rmse, file = "/Users/keya0/projects/nbasalary/models/boosted.rda")
+```
 
+## Fitting to Training Data
+```{r}
+rf_final <- finalize_workflow(rf_workflow, rf_best)
+rf_final <- fit(rf_final, data = nba_train)
+```
+
+```{r}
+save(rf_final, file = "/Users/keya0/projects/nbasalary/models/final_rf.rda")
 ```

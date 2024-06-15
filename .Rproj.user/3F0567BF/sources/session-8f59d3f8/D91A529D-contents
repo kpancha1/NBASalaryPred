@@ -6,7 +6,9 @@ date: "PSTAT 131 - Spring 2024"
 ---
 
 # Introduction
-The purpose of this project is to build and utilize a machine learning model that will predict NBA players' salaries in the 2022-2023 season. The data we are using is from the Kaggle dataset, ["NBA Player Salaries (2022-23 Season)"](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season/data?select=nba_salaries.csv). More information about the data can be found in [Source](#sources). We will try multiple models and choose the most accurate one to tackle this regression problem: "Based on their statistics, what would an NBA player's salary be for the 2022-2023 season?" Let's get started!
+The purpose of this project is to build and utilize a machine learning model that will predict NBA players' salaries in the 2022-2023 season. The data we are using is from the Kaggle dataset, ["NBA Player Salaries (2022-23 Season)"](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season/data?select=nba_salaries.csv). More information about the data can be found in the Sources section of this document. We will try multiple models and choose the most accurate one to tackle this regression problem: "Based on their statistics, what would an NBA player's salary be for the 2022-2023 season?" Let's get started!
+
+![NBA Logo with Cash]("/Users/keya0/projects/nbasalary/images/moneymoney.jpg")
 
 ## The Salary Cap
 Each team operates under a salary cap, a financial constraint that limits the total amount a team can spend on player salaries. Each NBA team is allotted the same salary cap, which is determined as a percentage of the league's revenue from the previous season. The salary cap for the 2022-2023 season was set at [$123.655 million](https://www.nba.com/news/nba-salary-cap-for-2022-23-season-set-at-just-over-123-million).
@@ -90,7 +92,7 @@ nbasalary <- nbasalary %>%
 ```
 
 ## Codebook
-Now that we have narrowed down the variables, we have the 19 predictors that we will be working with.
+Now that we have narrowed down the variables, we have the 19 predictors that we will be working with. This codebook can also be found within this project's [Github repository](https://github.com/kpancha1/NBASalaryPred/blob/ba8620357d98a9df06672f7ecf96d316839a5e4b/nbasalary_codebook.txt).
 
 These predictors are described as follows:
 * `player_name`: The first and last name of each NBA player.
@@ -152,14 +154,14 @@ To get a better idea of our data, we must create some visualizations. Firstly, w
 ```{r}
 ggplot(nbasalary, aes(salary)) +
   geom_histogram(binwidth = 1000000, fill='blue4') +
-  scale_x_continuous(labels = scales::dollar_format()) +
+  scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = "M")) +
   labs(
     title = "Distribution of NBA Salaries (2022-2023 Season)",
     x = "Salary (in millions of USD)",
     y = "Count"
   ) + theme_minimal()
 ```
-```{r, include=FALSE}
+```{r}
 range(nbasalary$salary)
 ```
 The salaries range from about \$5,800 all the way to about \$48,000,000. However, the majority of players earn less than ten million dollars. There is specifically a peak with almost 100 players earning about three million dollars.
@@ -186,7 +188,7 @@ ggplot(nbasalary, aes(x = pts, y = salary)) +
   labs(title = "Scatter Plot of Points vs Salary",
        x = "Points per Game",
        y = "Salary (in millions of USD)") +
-    scale_y_continuous(labels = scales::dollar_format()) +
+    scale_y_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = "M")) +
   theme_minimal()
 ```
 We intuitively can understand why the relationship between the two would be so strongly positive. The more points a player averages per game, the more they contribute to the team and make an impact on the game. Therefore, a higher salary would be merited. However, a high points per game does not necessarily mean that the player is efficient with the ball. The correlation matrix reveals that points per game and the efficiency metrics have weak positive correlations. Let's take a look at specifically points per game vs. EFG%:
@@ -200,14 +202,14 @@ ggplot(nbasalary, aes(x = pts, y = e_fg)) +
   theme_minimal()
 ```
 Those with the highest efficiency actually make the least amount of points per game. The less shots you take, the more impact each shot (whether a miss or a make) has on your EFG%. We can see this by the large range at a lower points per game, and as the points per game increase, the EFG% range narrows to around 50%. Let's observe if this unique distribution in relation to EFG% continues when comparing EFG% and salary:
-```{r}
+```{r, message=FALSE}
 ggplot(nbasalary, aes(x = e_fg, y = salary)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, color = "red3") +
   labs(title = "Scatter Plot of EFG% vs Salary",
        x = "Efficent Field Goal Percentage",
        y = "Salary (in millions of USD)") +
-  scale_y_continuous(labels = scales::dollar_format()) +
+  scale_y_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = "M")) +
   theme_minimal()
 ```
 The tapering of EFG% is shown here as well. The EFG% does not impact salary heavily at all; the players with the highest EFG% are actually do not see that reflected by their low salary. This makes sense given our previous investigation of EFG% and points per game. We can conclude that EFG% is not something that is heavily accounted for when determining salaries of players.
@@ -290,7 +292,7 @@ Around 13% of players were traded in the 2022-2023 season. Let's see if this sta
 ggplot(nbasalary_trade, aes(x = salary, fill = factor(traded))) +
   geom_density(alpha = 0.5) +
   labs(title = "Density Plot of Salary by Traded Status", x = "Salary", fill = "Traded") +
-  scale_x_continuous(labels = scales::dollar_format()) +
+  scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = "M")) +
   theme_minimal()
 ```
 The density plot shows that the distributions are very similar - both are unimodal and right-skewed. There appears to be slightly more variability in salary for players that were traded, as the peak is less narrow. The graph indicates that players who are traded are more likely to have a ten million to around 25 million salary than those who weren't.  These kinds of players are well-paid role players who can make a significant difference in a team's roster, but wouldn't break the budget like star player would. This would make them a high-valued trade option. However, the difference between the two populations are not significant enough to warrant including the variable `traded` in our final prediction dataset, so we will keep our data set the same.
@@ -473,23 +475,58 @@ Specifically, the best model's tuning parameters were:
 ```{r}
 rf_best
 ```
-A random forest model tuned to 17 variables, 320 trees, and a minimal node size of 5. We will take this model and fit it to first the entire training data set, and then to the testing set. This, as before, will be done in the separate file and loaded in to save time and computation power.
+A random forest model tuned to 17 variables, 320 trees, and a minimal node size of 5. We will take this model and fit it to first the entire training data set, and then to the testing set. This, as before, will be done in the [separate file](https://github.com/kpancha1/NBASalaryPred/blob/ba8620357d98a9df06672f7ecf96d316839a5e4b/nba_model_building.Rmd) and loaded in to save time and computation power.
 ```{r}
 load("/Users/keya0/projects/nbasalary/models/final_rf.rda")
 ```
 
 ## Fit to Training Data
-When we fit the model, we can now see t
+When we fit the model, we can now see the variable importance via the variance importance plot (VIP). This tells us which predictor variables had the greatest impact in predicting our response variable, salary.
 ```{r}
 rf_final %>% extract_fit_parsnip() %>% 
   vip() +
   theme_minimal()
 ```
+Here we see that `mp`, the average minutes played per game, was the most significant variable as we inferred from the EDA portion. This is followed by `pts` and `age` which also intuitively makes sense -- these two factors measure both performance and experience which are the foremost consideration in salary for almost any job. 
+
+There is then a notable decrease in importance to the next variable of `tov`, but nonetheless, the impact of turnovers as the next most important variable is consistent with the game. Players who pose a liability in the form of turnovers will be more likely to incur a smaller salary to reflect poor performance.
+
 ## Testing the Model
+For our final test: we will apply the model to data it has never seen before - the testing data.
+```{r}
+rf_final_test <- augment(rf_final, new_data = nba_test)
+
+rmse(rf_final_test, truth = salary, .pred)
+```
+We get an RMSE of \$6,594,081! Given that our response variable had a range of \$5,849 to \$48,070,014, the RMSE as a percentage of the range of salaries is approximately 13.7%:
+$\text{RMSE} \% = \left(\frac{\$6,594,081}{\$48,064,165}\right) \times 100 \approx 13.7\%$
+The RMSE shows that our model has a moderate level of error. It is most definitely not the most optimized version for the data, but not horrible.
+
+A visualization of the accuracy of our model can be seen in the plot below of predicted values vs. actual values of salary from the testing data.
+```{r}
+rf_final_test %>% 
+  ggplot(aes(x = salary, y = .pred)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", lty = 2, se = FALSE, color = "blue3") +
+  geom_abline(lty = 2, color = "red3") +
+  coord_obs_pred() +
+  labs(title = "Predicted Values vs. Actual Values", x = "Actual Salary", y = "Predicted Salary") + 
+  scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = "M")) +
+  scale_y_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = "M")) +
+  theme_minimal()
+```
+If each prediction were perfectly accurate, the data points would align in a straight line with a slope of 1. However, upon examining the plot, it is evident that only a few points adhere closely to this ideal line in blue. The linear regression line in red indicates that there is a positive linear relationship between the predicted and the actual values, though slightly off from the ideal line.
 
 # Conclusion
+Through extensive research, testing, and analysis, the most effective model for predicting NBA salaries in the 2022-2023 season was found to be a random forest.
 
-# <a id="sources">Sources</a>
+The most impactful variables were mp, pts, and age. This is consistent with observation made in regards to which players last the longest career-wise in the league, which spend the most time on the court, and which score the most. 
+
+In the future, salary prediction can be further optimized by introducing more data to work with throughout multiple seasons. Having more data improves the accuracy of regression prediction models by providing a more representative sample, reducing overfitting, mitigating outlier influence, and enabling more robust model training and validation. Therefore, we would be able to utilize a more conservative split of 90/10 for training and testing data, resulting in hopefully more accurately determine player salaries.
+
+In conclusion, the NBA Salary Prediction Model project has been an invaluable opportunity to deepen my expertise in machine learning techniques and to apply my passion for basketball via NBA-centric data analysis. It has been a eye-opening and exciting journey into the world of sports analytics, and has allowed me to leverage the power of data to uncover meaningful insights and predictions on topics close to my interests!
+
+# Sources
 The data utilized in this project is from the Kaggle dataset, ["NBA Player Salaries (2022-23 Season)"](https://www.kaggle.com/datasets/jamiewelsh2/nba-player-salaries-2022-23-season/data?select=nba_salaries.csv), which was collected and shared by user [Jamie Welsh](https://www.kaggle.com/jamiewelsh2). The dataset was created through web scrapping [HoopsHype](https://hoopshype.com/) for player salaries and [Basketball Reference](https://www.basketball-reference.com/) for advanced basketball statistics.
 
 Information regarding the NBA and the statistical parameters used in the model was collected via the [official NBA website](nba.com).

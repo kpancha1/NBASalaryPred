@@ -269,3 +269,13 @@ save(rf_tuned, rf_best, rf_rmse, file = "/Users/keya0/projects/nbasalary/models/
 # BOOSTED TREES
 save(boosted_tuned, boosted_best, boosted_rmse, file = "/Users/keya0/projects/nbasalary/models/boosted.rda")
 ```
+
+## Fitting to Training Data
+```{r}
+rf_final <- finalize_workflow(rf_workflow, rf_best)
+rf_final <- fit(rf_final, data = nba_train)
+```
+
+```{r}
+save(rf_final, file = "/Users/keya0/projects/nbasalary/models/final_rf.rda")
+```

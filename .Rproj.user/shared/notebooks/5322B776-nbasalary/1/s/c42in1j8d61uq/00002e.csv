@@ -1,0 +1,12 @@
+"0","rf_final_test %>% "
+"0","  ggplot(aes(x = salary, y = .pred)) +"
+"0","  geom_point(alpha = 0.5) +"
+"0","  geom_smooth(method = ""lm"", lty = 2, se = FALSE, color = ""blue3"") +"
+"0","  geom_abline(lty = 2, color = ""red3"") +"
+"0","  coord_obs_pred() +"
+"0","  labs(title = ""Predicted Values vs. Actual Values"", x = ""Actual Salary"", y = ""Predicted Salary"") + "
+"0","  scale_x_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = ""M"")) +"
+"0","  scale_y_continuous(labels = scales::dollar_format(scale = 1e-6, suffix = ""M"")) +"
+"0","  theme_minimal()"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
